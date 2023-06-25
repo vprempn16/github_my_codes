@@ -1,0 +1,22 @@
+
+	
+		1.layouts/vlayout/modules/Users/UserViewHeader.tpl 	  
+		
+
+			Add lines after "<div class="detailViewContainer">" this line (Line NO : 16)
+
+
+		           {if $smarty.request.message == 'success'}
+                		<div class="alert alert-success" style="margin-top: 15px; margin-bottom: 0px;">Successfully cheanged Access key </div>
+           		   {/if}
+			
+			And add lines after closed foreach loop (Line NO : 50)
+
+				<div class = 'btn-group'>
+                                                        <a href= "index.php?parent=Settings&module=Vtiger&action=ChangeAccesskey" style="border: 1.2px solid #dad0d0;padding: 4px;background: #f6f3f3;font-weight: bold;float: inline-end; color: black;"  onclick="return confirm('Are you want to change Access key?')">Change Access key</a>
+                                </div>
+
+
+
+
+		2.And add "ChangeAccesskey.php" file in that location : "modules/Settings/Vtiger/actions/ChangeAccesskey.php" .

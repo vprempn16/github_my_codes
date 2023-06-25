@@ -1,0 +1,384 @@
+Steps
+    1. addComentsInCalenser.php
+    2. modules/Calendar/models/DetailView.php
+    3. layouts/vlayout/modules/Vtiger/resources/Detail.js
+        function: saveCommentaddCalendarSummaryFieldSetting.phpaddCalendarSummaryFieldSetting.php
+
+
+    Add List view functions
+        1. modules/Vtiger/resources/BA_script.js
+        2. modules/Calendar/actions/BaFunction.php
+	3. layouts/vlayout/modules/Calendar/ListViewContents.tpl
+		Add activity type to the checkbox for Task or Event validation
+		Code: <input type="checkbox" value="{$LISTVIEW_ENTRY->getId()}" data-activity_type="{$LISTVIEW_ENTRY->get('activitytype')}" class="listViewEntriesCheckBox"/>
+	4. Add Email Template and update the template id (38) 
+		Funciton: sendNotification
+		Position: $mailTemplateId 
+
+    Detail view Features:	
+	1. layouts/vlayout/modules/Calendar/DetailViewBlockView.tpl	
+	2. modules/Calendar/views/Detail.php
+		Function: showModuleDetailView
+		Position: After getting viewer	
+		Code: 
+			global $adb;
+			$createdDate = $recordModel->get('createdtime');
+			$now = time();
+			$createdDate = strtotime($createdDate);
+			$datediff = $now - $createdDate;
+			$noOfDays = round($datediff / (60 * 60 * 24));
+
+			$lastModifiedUserId = $recordModel->get('modifiedby');
+			$getModifiedUserName = $adb->pquery("select CONCAT (first_name ,' ', last_name) as name from vtiger_users where id = ?", array($lastModifiedUserId));
+			$modifiedUserName = $adb->query_result( $getModifiedUserName );
+
+			$processPercentage = 22;
+
+			$documentsCount = 0;
+
+			/*
+			$relationListView = Vtiger_RelationListView_Model::getInstance($recordModel, 'Documents', 'Documents');
+			$pagingModel = new Vtiger_Paging_Model();
+			$models = $relationListView->getEntries($pagingModel);
+			$documentsCount = count($models);
+			 */
+
+			$relationListView = Vtiger_RelationListView_Model::getInstance($recordModel, 'Emails', 'Emails');
+			$pagingModel = new Vtiger_Paging_Model();
+			$models = $relationListView->getEntries($pagingModel);
+			$emailCount = count($models);
+
+			$viewer->assign('MODIFIED_USER_NAME' , $modifiedUserName);
+			$viewer->assign('NO_OF_DAYS', $noOfDays);
+			$viewer->assign('NO_OF_EMAIL', $emailCount );
+			$viewer->assign('NO_OF_DOC', $documentsCount );
+			$viewer->assign('PROCESS_PERCETAGE', $processPercentage);
+
+
+    Task Reminder	
+	1. Create table
+		CREATE TABLE `vtiger_ba_postpone_remind_task` ( `id` int(11) NOT NULL AUTO_INCREMENT, `record_id` int(11) DEFAULT NULL,  `next_reminder_date` date DEFAULT NULL, `next_reminder_time` time DEFAULT NULL, PRIMARY KEY (`id`));
+
+		CREATE TABLE `vtiger_ba_reminder_configure' ( `id` int(11) NOT NULL AUTO_INCREMENT, show_task varchar(10) , show_event varchar(10) );
+
+	2. modules/Calendar/models/Module.php
+		Function: getCalendarReminder
+		Position: End of the if($activityReminder != '' ) condition
+		Code:
+			$getNotificationPermisson = $db->pquery('select * from vtiger_ba_reminder_configure ');
+			$count = $db->num_rows($getNotificationPermisson);
+			if($count){
+			    $event = $db->query_result($getNotificationPermisson , 0, 'show_event' );
+			    $task = $db->query_result($getNotificationPermisson , 0, 'show_task' );
+			}
+
+			if($activityReminder != '' ) {
+			    $currentTime = time();
+			    $date = date('Y-m-d', strtotime("+$activityReminder seconds", $currentTime));
+			    $time = date('H:i',   strtotime("+$activityReminder seconds", $currentTime));
+			    if($event == 'on'){
+				$reminderActivitiesResult = "SELECT activityid FROM vtiger_activity 
+				        INNER JOIN vtiger_crmentity ON vtiger_activity.activityid = vtiger_crmentity.crmid
+				        AND activitytype != 'Task'
+				        AND vtiger_crmentity.smownerid = ? AND vtiger_crmentity.deleted = 0
+				        AND ((DATE_FORMAT(vtiger_activity.date_start,'%Y-%m-%d') <= ?)
+				        AND (TIME_FORMAT(vtiger_activity.time_start,'%H:%i') <= ?) )
+				        AND vtiger_activity.eventstatus <> 'Held' AND (vtiger_activity.status <> 'Completed' OR vtiger_activity.status IS NULL) LIMIT 20";
+
+				$result = $db->pquery($reminderActivitiesResult, array($currentUserModel->getId(), $date, $time));
+				$rows = $db->num_rows($result);
+				for($i=0; $i<$rows; $i++) {
+				    $recordId = $db->query_result($result, $i, 'activityid');
+				    $recordModels[] = Vtiger_Record_Model::getInstanceById($recordId, 'Calendar');
+				}
+			    }
+
+			    if($task == 'on'){
+				$queryResult = $db->pquery(" select activityid from vtiger_activity 
+				    left join vtiger_crmentity on vtiger_crmentity.crmid = activityid  
+				    left join vtiger_ba_postpone_remind_task on vtiger_ba_postpone_remind_task.record_id = activityid  
+				    where activitytype = 'Task' AND vtiger_crmentity.smownerid = ? 
+				    AND vtiger_crmentity.deleted = 0 
+
+				    AND ( (DATE_FORMAT(vtiger_activity.date_start,'%Y-%m-%d') <= ? ) AND (TIME_FORMAT(vtiger_activity.time_start,'%H:%i') <= ?) ) 
+
+				    AND ( (DATE_FORMAT(vtiger_ba_postpone_remind_task.next_reminder_date,'%Y-%m-%d') <= ?) AND (TIME_FORMAT(vtiger_ba_postpone_remind_task.next_reminder_time,'%H:%i') <= ?) OR vtiger_ba_postpone_remind_task.record_id IS NULL ) 
+
+				    AND (vtiger_activity.status <> 'Completed' OR vtiger_activity.status IS NULL ) LIMIT 20 ",
+				        array($currentUserModel->getId(), $date, $time, $date, $time ));
+
+				$noOfTasksPending = $db->num_rows($queryResult);
+				while($row = $db->fetch_array($queryResult)){
+				    $recordId = $row['activityid'];
+				    $recordModels[] = Vtiger_Record_Model::getInstanceById($recordId, 'Calendar');
+				}
+			    }
+
+	
+	3. layouts/vlayout/modules/Vtiger/resources/Vtiger.js
+		Function: showReminderPopup
+		Replace the function script
+		Code: 
+			if($('#ba-postpone-reminder_'+record.id).length == 0 ){
+			    if( record.activitytype != 'To Do' ){
+				var content = '<div class="row-fluid" style="color:black">\n\
+				            <span class="span12">'+app.vtranslate('JS_START_DATE_TIME')+' : '+record.date_start+'</span>\n\
+				            <span class="span8">'+app.vtranslate('JS_END_DATE_TIME')+' : '+record.due_date+'</span>'+
+				            '<span class="span3 right"><h4><a id="reminder_'+record.id+'" class="pull-right" href=#>'
+				                +app.vtranslate('JS_POSTPONE')+'</a></h4></span></div>';
+			    } else {
+				var content = '<div class="row-fluid" id="ba-postpone-reminder_'+record.id+'" style="color:black">\n\
+				            <span class="span12">'+app.vtranslate('JS_START_DATE_TIME')+' : '+record.date_start+'</span>\n\
+				            <span class="span8">'+app.vtranslate('JS_END_DATE_TIME')+' : '+record.due_date+'</span>'+
+				            '<span class="dropdown span3 postpone-popover">'+
+				            '   <span class="dropdown-toggle" data-toggle="dropdown" href="#">'+
+				            '        <a class="userName textOverflowEllipsis" ><strong> Postpone </strong>&nbsp;<i class="caret"></i> </a> '+
+				            '   </span>'+
+				            '   <div class="dropdown-menu pull-right ba_postpone-popover" style="padding: 5px;">'+
+				            '   <div class="tabbable"> '+
+				            '       <ul class="nav nav-tabs" >'+
+				            '           <li class="active"><a data-toggle="tab" href="#postpone_days ">Days</a></li>'+
+				            '           <li ><a data-toggle="tab" href="#postpone_hour ">Hours</a></li>'+
+				            '           <li ><a data-toggle="tab" href="#postpone_minutes ">Minutes</a></li>'+
+				            '       </ul>'+
+
+				            '       <form id="postpone_from_inputs"> <input type="hidden" name="record_id" value='+record.id+' />'+
+				            '           <div class="tab-content">'+
+				            '               <div class="tab-pane active" id="postpone_days"> <label> Postpone days:</label> <input type="number" value="" name="postpone_days" /> </div>'+
+				            '               <div class="tab-pane" id="postpone_hour"> <label> Postpone hours: </label> <input type="number" value="" name="postpone_hours" /> </div>'+
+				            '               <div class="tab-pane" id="postpone_minutes"> <label> Postpone minutes:</label> <input type="number" value=""  name="postpone_minutes" /> </div>'+
+				            '           </div>'+
+				            '           <div class="save-postpone-form-data span3" style="margin-left: 30%;" > <button class="btn btn-primary" id="save_postpone_duration"> Postpone </div>'+
+				            '       </form>'+
+				            '   </div>  </div>'+
+				            '</span>';
+			    }
+			var params = {
+			    title: '&nbsp;&nbsp;<span style="position: relative; top: 8px;">'+record.activitytype+' - '+
+				    '<a target="_blank" href="index.php?module=Calendar&view=Detail&record='+record.id+'">'+record.subject+'</a></span>',
+
+			    text: content,
+			    width: '30%',
+			    min_height: '75px',
+			    addclass:'vtReminder',
+			    icon: 'vtReminder-icon',
+			    hide:false,
+			    closer:true,
+			    type:'info',
+			    after_open:function(p) {
+				jQuery(p).data('info', record);
+			    }
+			};
+
+			var notify = Vtiger_Helper_Js.showPnotify(params);
+			jQuery('#reminder_'+record.id).bind('click', function() {
+				notify.remove();
+				var url = 'index.php?module=Calendar&action=ActivityReminder&mode=postpone&record='+record.id;
+				AppConnector.request(url);
+			});
+			}
+
+
+	Link files Reminder JS
+	
+		modules/Vtiger/views/Index.php
+			Fn: getHeaderScripts
+
+		layouts/vlayout/modules/Vtiger/Header.tpl
+		
+
+		4. modules/Calendar/actions/PostponeReminder.php
+		5. layouts/vlayout/modules/Settings/Vtiger/CalendarReminderConfig.tpl - setting Page
+		6. modules/Vtiger/resources/BA_script.js
+
+	
+
+                $(document).on('click' , '#save_postpone_duration', function(){
+                    var data = [] ;
+                    var form_data = $('#postpone_from_inputs').serializeArray();
+                    $.each(form_data, function (key, input) {
+                        data.push(input.name, input.value);
+                    });
+                    console.log(data);
+                    $.ajax({
+                        type: 'POST',
+                        data: data,
+                        url: 'index.php?module=Calendar&action=PostponeReminder',
+                        success: function(response){
+                            console.log(response);
+                        }
+                    });
+                });
+
+	
+	4. Detail view like Summary 	
+		1. modules/Calendar/views/Detail.php
+			function: showModuleBasicView
+		2. modules/Vtiger/views/Detail.php
+			Function: process
+			
+		2. modules/Vtiger/models/DetailView.php
+			Function: getWidgets
+		3. modules/Calendar/models/DetailView.php
+			Function: getDetailViewRelatedLinks
+		3. layouts/vlayout/modules/Calendar/DetailViewSummaryContents.tpl
+		4. modules/Calendar/models/Module.php
+			Function: getSummaryViewFieldsList
+		5. layouts/vlayout/modules/Calendar/ModuleSummaryView.tpl	
+
+
+
+	Live 
+		1. modules/Calendar/views/Detail.php
+			Function: showModuleBasicView
+		2. modules/Calendar/models/DetailView.php
+			Function: getDetailViewRelatedLinks
+			AddFunction: getWidgets	
+		3. modules/Vtiger/views/Detail.php
+			Function: process
+			Function: showModuleBasicView
+		4. modules/Vtiger/models/DetailView.php
+			Function: getWidgets
+		5. modules/Calendar/models/Module.php
+			Function: getSummaryViewFieldsList
+		6. layouts/vlayout/modules/Calendar/DetailViewSummaryContents.tpl
+		7. layouts/vlayout/modules/Calendar/ModuleSummaryView.tpl
+		8. layouts/vlayout/modules/Calendar/SummaryViewWidgets.tpl
+	
+
+	Document Relation:
+		1. modules/Calendar/views/Detail.php
+		    function __construct() {
+			parent::__construct();
+			$this->exposeMethod('showRelatedRecords');
+		    }
+		2. modules/Vtiger/actions/Save.php
+		    if( $request->get('sourceModule') == 'Calendar'){
+		        global $adb;
+		        $adb->pquery('insert into vtiger_crmentityrel (crmid,module,relcrmid,relmodule) values (?,?,?,?)', array($parentRecordId, $parentModuleName , $relatedRecordId, $relatedModule->getName() )); 
+		    }
+		3. modules/Documents/Documents.php
+			Function: save_module
+			Code:
+				if( $_POST['parent_module'] == 'Calendar'){
+				    $filename_fieldname = 'file';
+				}
+			
+
+
+        global $current_user;
+        if($current_user->id == 12){
+            echo "<pre>"; print_R( $this->showModuleSummaryView($request) ); die;
+        }
+
+
+
+
+$(document).on( 'mouseover', ".ba_postpone-popover, .tabbable" , function() {
+    $( this ).closest('.vtReminder').next().find('.ui-pnotify-container').css({'margin-top': '300px'})
+
+  })
+  .on('mouseleave',  ".ba_postpone-popover" , function() {
+   $( this ).closest('.vtReminder').next().find('.ui-pnotify-container').css({'margin-top': '0px'})
+});
+
+HARD CODE file
+	File: modules/Users/models/Record.php
+	function: getCurrentUserActivityReminderInSeconds
+
+BaUserSMTP
+
+{if $PROCESS_PERCETAGE != ''}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/easy-pie-chart/2.1.6/jquery.easypiechart.min.js" integrity="sha512-DHNepbIus9t4e6YoMBSJLwl+nnm0tIwMBonsQQ+W9NKN6gVVVbomJs9Ii3mQ+HzGZiU5FyJLdnAz9a63ZgZvTQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<div class="row-fluid">
+    <div class="span2"> <div> <b>Fortschritt der Aufgabe </b></div> <div style="position: relative;" id="ba_process_chart_container" data-percent="{$PROCESS_PERCETAGE}" > <span style="position: absolute;top: 39%;left: 28%;font-size: large;" class="percent"></span> </div> </div>
+    <div class="span2"> <div> <b>Aktiv seit </b></div> <h1 style="padding-top: 10%;"> {$NO_OF_DAYS}</h1> <b>Tagen</b> </div>
+    <div class="span2"> <div> <b>Dokumente zugeordnet </b></div> <h1 style="padding-top: 10%;" > {$NO_OF_DOC} </h1> </div>
+    <div class="span2"> <div> <b>E-Mail zugeordnet </b></div> <h1 style="padding-top: 10%;" > {$NO_OF_EMAIL} </h1> </div>
+    <div class="span2"> <div> <b>Letzter Bearbeiter</b> </div> <h4 style="padding-top: 10%;" > {$MODIFIED_USER_NAME}  </h4> </div>
+</div>
+<br />
+{/if}
+
+<script>
+    $(function() {
+        $('#ba_process_chart_container').easyPieChart({
+            easing: 'easeOutBounce',
+            barColor: '#ef1e25',
+            lineCap: 'round',
+            trackColor: '#b8b0b0',
+            scaleLength: 5,
+            lineWidth: 8,
+            onStep: function(from, to, percent) {
+                $(this.el).find('.percent').text(Math.round(percent)+'%' );
+            }
+        });
+    });
+</script>
+
+
+<script src="modules/Synology/resource/ba_dropzone.js" defer > </script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.2/basic.css" integrity="sha512-+Vla3mZvC+lQdBu1SKhXLCbzoNCl0hQ8GtCK8+4gOJS/PN9TTn0AO6SxlpX8p+5Zoumf1vXFyMlhpQtVD5+eSw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+
+
+
+    $(function() {
+        $('#ba_process_chart_container').easyPieChart({
+            easing: 'easeOutBounce',
+            barColor: '#ef1e25',
+            lineCap: 'round',
+            trackColor: '#b8b0b0',
+            scaleLength: 5,
+            lineWidth: 8,
+            onStep: function(from, to, percent) {
+                $(this.el).find('.percent').text(Math.round(percent)+'%' );
+            }
+        });
+    });
+    var baDropzone = new Dropzone("#ba-task-document-upload");
+    baDropzone.on("complete", function(file) {
+      baDropzone.removeFile(file);
+    });
+
+
+
+
+
+
+Calendar field Settings Page:
+	addCalendarSummaryFieldSetting.php
+	modules/Settings/Vtiger/views/CalendarSummaryField.php
+	layouts/vlayout/modules/Settings/Vtiger/CalendarSummaryField.tpl
+	
+	// Save Calendar summary fields
+	$(document).on('click' , '#save-calendar-summary-field', function(){
+	    var selectField = $('select[name="field_list"]').val();
+	    $.ajax({
+		type: 'POST',
+		dataType: 'JSON',
+		data: { selectedField: selectField },
+		url: 'index.php?parent=Settings&module=Vtiger&view=CalendarSummaryField&operation=saveFields',
+		success: function( response ){
+		    showAlert('success',  'Settings saved successfully');
+		}
+	    });
+	});
+	// Show alert
+	function showAlert(alertType,  text){
+	    var params = {
+		text: text,
+	      addclass:'vtReminder',
+	      icon: 'vtReminder-icon',
+	      hide:true,
+	      closer:true,
+	      type:alertType,
+	      after_open:function(p) {
+		  jQuery(p).data('info');
+	      }
+	    };
+	    var notify = Vtiger_Helper_Js.showPnotify(params);
+	}
+
+

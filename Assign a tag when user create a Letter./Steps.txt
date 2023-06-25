@@ -1,0 +1,35 @@
+Steps 
+	1. SRBA_GroubDiff_field.php
+	2. modules/BALetters/actions/suggestionTagName.php
+	3. modules/BALetters/helper.php
+		After create a letter record 
+ 
+			$focus = CRMEntity::getInstance('Contacts');    
+			$contactObj = Vtiger_Record_Model::getInstanceById($rel_id, 'Contacts');
+			$tagName = $contactObj->entity->column_fields['cf_764'];
+
+			if($tagName) {
+				$getExistId = $adb->pquery(" select id from vtiger_freetags where tag = ? ", array($tagName) );
+				$tagId = $adb->query_result($getExistId , 0 , 'id');
+				if( $tagId ) {
+				        $adb->pquery("insert into vtiger_freetagged_objects(tag_id,tagger_id,object_id,module) values(?,?,?,?)",array($tagId,$current_user->id,$letter_id,"BALetters"));                 
+				} else {
+				        // Create new Tag 
+				        $getCountOfTagId = $adb->pquery("select id from vtiger_freetags_seq");
+				        $countOfTagId = $adb->query_result($getCountOfTagId,0 , 'id' );
+				        $countOfTagId++;
+				        $adb->pquery("insert into vtiger_freetags(id,tag,raw_tag) values(?,?,?)",array($countOfTagId, $tagName, $tagName) );
+				        $adb->pquery(" update vtiger_freetags_seq set id = ?",array($countOfTagId) );
+				        $adb->pquery("insert into vtiger_srba_tag_letter(id, tag_name,tag_color) values(?,?)", array($countOfTagId,$tagName));
+
+				        // Add the record in paticular tag
+
+				        $adb->pquery("insert into vtiger_freetagged_objects(tag_id,tagger_id,object_id,module) values(?,?,?,?)",array($countOfTagId, $current_user->id, $letter_id, "BALetters"));
+
+				}
+				$existRecordModel = Vtiger_Record_Model::getInstanceById($letter_id, 'BALetters');
+				$existRecordModel->set('mode', 'edit');
+				$existRecordModel->set('head_tag',$tagName);
+				$existRecordModel->save();
+			}
+	

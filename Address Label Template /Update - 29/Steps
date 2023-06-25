@@ -1,0 +1,14 @@
+Add a script inside the " if($_POST['options'] == 'preview') "  condition before " echo json_encode(['path' => $letter_path]); " 
+
+              try{
+                        if( $_POST['operation'] == 'print'){
+                                $printerName = $_POST['printer'];
+                                $printcmd = "java -classpath ".$root_directory."pdfbox-app-1.7.1.jar org.apache.pdfbox.PrintPDF -silentPrint -printerName $printerName $letter_path";
+                                print_r($printcmd); die;
+                        }
+                }
+                catch(Exception $e) {
+                         echo 'Message: ' .$e->getMessage();
+                         die;
+                }
+

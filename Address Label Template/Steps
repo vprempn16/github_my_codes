@@ -1,0 +1,32 @@
+Steps
+	1. Unzip AddressLabelTemplate.zip file
+
+	2. Run " add_admin_address_label_template.php " file for create admin section setting
+
+	3. Add js script in headerscript file 
+
+	4. Add PHP script in modules/BALetters/views/HeaderTemplate.php	
+		
+		After the "if($_POST['call'] == 'getDraftRecords')" condition closed
+
+		    if( $_POST['call'] == 'getAddressTemplate' ) {
+
+		        $getAddressData = $adb->pquery("select id, name from vtiger_ba_address_template ", array());
+		        while($row = $adb->fetch_array($getAddressData)){
+		            $addressTemplates[$row['id']] = $row['name'];
+		        }
+		        $templates['templates'] = $addressTemplates;
+		        echo json_encode($templates);
+		        die;
+
+		    }
+		    if($_POST['call'] == 'getAddressContent')
+		    {
+		        $contentTemplateName = $_POST['contentTemplateName'];
+		        $getContentTemplate = $adb->pquery('select content from vtiger_ba_address_template where id = ?',array($contentTemplateName));
+		        $contentTemp = $adb->fetch_array($getContentTemplate);
+		        $decodeContent = unserialize(base64_decode($contentTemp['content']));
+		        echo json_encode($decodeContent);
+		        die;
+		    }
+

@@ -1,0 +1,139 @@
+$(function(){
+
+        // Get module name
+        var moduleName = app.getModuleName();
+        // Get module view
+        var moduleView = app.getViewName();
+        // Get record id
+        var record_id = $('#recordId').val();
+
+        if(moduleName == 'Contacts' && moduleView == 'List') {
+                $('.listViewMassActions .dropdown-menu .divider').after('<li id="Contacts_listView_advancedAction_RichTextEdit"><a class="toggle" onclick="openAddressTemplates()">Etikett drucken(QL510)</a></li> <li id="Contacts_listView_advancedAction_RichTextEdit"><a class="toggle" onclick="openAddressTemplates()"> Etikett drucken(Dymo 450 Duo) </a></li>');
+        } else if( moduleName == 'Contacts' && moduleView == 'Detail' ) {
+                var relatedButton = '<button class="btn" onclick = "openAddressTemplates('+record_id+')" style="margin-right: 1%;"> Etikett drucken(QL510) </button> <button class="btn" onclick = "openAddressTemplates('+record_id+')" style="margin-right: 1%;"> Etikett drucken(Dymo 450 Duo) </button> ';
+
+                $('.detailViewButtoncontainer').find('.btn-toolbar').append(relatedButton);
+                $('.detailViewButtoncontainer').find('.btn-toolbar').css({'width': '115%'});
+        }
+
+});
+
+function openAddressTemplates(recordId){
+
+        if( recordId == undefined ){
+                var recordNo = count_selected_recordfn();
+        } else {
+                var recordNo = [recordId];
+        }
+        if(recordNo != '') {
+                $.ajax({
+                        type:'POST',
+                        data: {
+                                'call':'getAddressTemplate',
+                        },
+                        datatype:'JSON',
+                        url:'index.php?module=BALetters&view=HeaderTemplate',
+                        success:function(data) {
+                                var data = JSON.parse(data);
+                                var contentName = data.templates;
+                                $("#model").html('');
+
+                                var headers = '<input type="hidden" id="ViewPage" name ="ViewPage" value= "ListViewRecords" /> <input id="recordId" type="hidden" name ="recordId" value="'+recordNo+'" /><div style="float: right;"></div><table><tr><td style="font-weight: bold;width: 30%;" >Subject<span class="redColor">*</span></td><td><textarea id="HeaderTemplateName" type="text" name ="PdffileName" required style="width: 500px;" ></textarea> </td></tr>';
+                                var textBox = '';
+
+                                var contentTemp = '<table><tr><td style="font-weight: bold;width: 216px;">Content Templates</td><td><select id="select_address_template" name="content_temp"><option value="">Select</option> ';
+                                if(contentName != null) {
+                                        for(var content_key in contentName) {
+                                                contentTemp += '<option value="' + content_key + '">'+contentName[content_key]+'</option>';
+                                        }
+                                }
+
+                                textBox = '</td></tr> </table> <table class="ba_letter_date_section"> <tr> <td> </td> <td style="width: 100%;"> <div><button type="button" style="float: right;" class="btn" onclick="baPrintAddress(0,['+recordNo+'])">Print</button></div> </td> </tr> </table>  <body> <textarea cols="80" id="content_template" name="ContentTemplate"></textarea> ';
+
+//                                $('#model').append(headers);
+                                $('#model').append(contentTemp);
+                                $("#model").append(textBox);
+                                jQuery("#modelPage").modal('show');
+
+                                $('#content_template').ready(function() {
+                                        CKEDITOR.replace('content_template', {
+                                                height: '350px',
+                                                contentsCss: "body {font-size: 14px; font-family: Arial;}",
+                                        });
+
+                                });
+
+                                if(data.default_template)  {
+                                        $('#header_template').val(data.default_template);
+                                }
+                        }
+                });
+        }
+        else {
+                alert("Please select a record");
+        }
+}
+
+$(document).on('change','#select_address_template',function() {
+
+        if(this.value !='') {
+                var selectedContentName = this.value;
+                $.ajax({
+                        type:'POST',
+                        data: {
+                                'contentTemplateName': selectedContentName,
+                                'call': 'getAddressContent'
+                        },
+                        datatype:'JSON',
+                        url: 'index.php?module=BALetters&view=HeaderTemplate',
+                        success:function(data) {
+                                var selectedContent = JSON.parse(data);
+                                CKEDITOR.instances['content_template'].insertHtml(selectedContent);
+                        }
+                });
+        }
+});
+
+function baPrintAddress(action , recordId ){
+        var contents = CKEDITOR.instances['content_template'].getData();
+//        var fileName = document.getElementById('HeaderTemplateName').value;
+        if(contents != "" ) {
+                // Clear the HTML
+                $('#ba_preview_letter_body').html('');
+                var progressIndicatorElement = jQuery.progressIndicator({
+                        'message' : 'Loading...',
+                        'position' : 'html',
+                        'blockInfo' : {
+                                'enabled' : true
+                        },
+                });
+
+                $.ajax({
+                        type:'POST',
+                        datatype: 'JSON',
+                        data: {
+                                'options': 'preview',
+                                'recordId': recordId,
+                                'ContentTemplate': contents,
+                                'PdffileName': fileName,
+                        },
+                        url:'index.php?module=BALetters&view=HeaderTemplate&mode=pdf',
+                        success:function(data) {
+                                var response = JSON.parse(data);
+                                progressIndicatorElement.progressIndicator({
+                                        'mode' : 'hide'
+                                });
+
+                                // Open modal and show the PDF in Iframe
+                                $('#ba_preview_letter').modal('show');
+                                $('#ba_preview_letter_body').html('<iframe src="'+response.path+'" width="100%" height="100%"></iframe>');
+                        }
+                });
+        }
+        else {
+                alert("Please write a content.");
+        }
+
+}
+
+

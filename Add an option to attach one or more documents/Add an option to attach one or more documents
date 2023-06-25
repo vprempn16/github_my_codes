@@ -1,0 +1,56 @@
+
+
+
+		1. modules/Vtiger/views/Popup.php (Line no : 102)
+
+			Add this line " $multiSelectMode="true"; "	in "initializer List View Contents()"function after this line " $multiSelectMode = $request->get('multi_select');"
+
+
+
+		2. layouts/vlayout/modules/Emails/resources/MassEdit.js (Line NO : 281) in "registerBrowseCrmEvent : function()" function.
+			
+
+			Lines should be  change to : (Line NO : 281)
+
+			 
+                                  " 	var selectedFileName = responseData[selectedDocumentId].name;
+                                        var selectedFileSize =  responseData[selectedDocumentId].filesize;    "
+
+
+
+
+
+			1. Add the Script to Your Js file
+
+				$(document).on('change','#AttachtAllDocument',function(){
+				        if($('#AttachtAllDocument').prop("checked")==true){
+				                $('.Show_custom_upload_files').hide();
+				        }else{
+				                $('.Show_custom_upload_files').show();
+				        }
+				});
+				var CustomCheckBoxValue = $('#AttachtAllDocument').prop("checked") ;
+				if(CustomCheckBoxValue == false){
+			                $.ajax({
+			                        type:'POST',
+			                        data :{'sambel':'test'},
+			                        dataType : "JSON",
+			                        url: "index.php?parent=Settings&module=Vtiger&view=UpdateCustomDocument&task=getData",
+			                        success:function(data){
+			                               for(var id in data){
+			                                        $('#Show_custom_upload_files').after('<div style="color: cadetblue;">'+data[id].name+'</div>'); 
+		                                        }
+			                        }
+			                })
+				} 
+
+
+			2. modules/Settings/Vtiger/views/UpdateCustomDocument.php
+
+				elseif($task == 'getData'){
+		                        $getData = $adb->pquery('select name from Vtiger_srba_documents where filter = 1');
+		                        while($row = $adb->fetch_array($getData)){
+		                                $fileName[] = $row; 
+		                        }    
+		                        echo JSON_encode($fileName);
+		                } 								

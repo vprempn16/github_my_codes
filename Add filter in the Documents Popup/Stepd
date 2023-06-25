@@ -1,0 +1,58 @@
+
+
+
+		1 . modules/Vtiger/views/Popup.php 
+		
+	            	(i)	(Line NO : 136 - 143)
+	
+			                $filterId = $request->get('viewname');
+			                if($filterId != null){
+				                $listViewModel = Vtiger_ListView_Model::getInstance($moduleName, $cvId);
+			 	               }
+			                $listViewModel->set('folder_id',$request->get('folder_id'));
+        			        $listViewModel->set('folder_value',$request->get('folder_value'));
+
+
+		
+
+			(ii)	(Line NO : 242 - 260)
+  		                        $documentModuleModel = Vtiger_Module_Model::getInstance("Documents");
+		                        $defaultCustomFilter = $documentModuleModel->getDefaultCustomFilter();
+		                        $folderList = Documents_Module_Model::getAllFolders();
+		                        $this->viewName = $request->get('viewname');
+		
+		                        if(empty($this->viewName)){
+		                                $customView = new CustomView();
+		                                $this->viewName = $customView->getViewId($moduleName);
+		                        }
+	
+		                        $viewer->assign('COLUMN_NAME',$orderBy);
+		                        $viewer->assign('CUSTOM_VIEWS', CustomView_Record_Model::getAllByGroup($moduleName))-
+        		                $viewer->assign('VIEWID', $this->viewName);
+                		        $viewer->assign('FOLDERS', $folderList);
+               			        $viewer->assign('FOLDER_NAME',$request->get('folder_value'));
+            			        $viewer->assign('DEFAULT_CUSTOM_FILTER_ID', $defaultCustomFilter);
+
+
+
+				
+		2 . layouts/vlayout/modules/Vtiger/PopupContents.tpl (Line NO : 37 - 64)
+		
+
+		3 . To add these lines in HeaderScript Js file 
+
+
+			$(document).on('change','#customFilter',function(){
+			        var currentPageLocation = "index.php?view=Popup&module=Documents&src_module=Emails&src_field=composeEmail&triggerEventName=postSelection8037";
+			        var nextPageId = $(this).val();
+			        if(nextPageId >=0 ){
+			                var nextPage = currentPageLocation+'&viewname='+nextPageId;
+			        }else{
+			                var nextPageId = nextPageId.replace(" ", "+");
+			                nextPage = currentPageLocation+'&folder_id=folderid&folder_value='+nextPageId;
+			        }
+			        window.location.assign(nextPage);
+
+			});
+	
+ 

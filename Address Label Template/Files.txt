@@ -1,0 +1,12 @@
+Steps 
+	1. add_admin_address_label_template.php
+
+	2. modules/Settings/Vtiger/views/AddressTemplate.php
+
+	3. layouts/vlayout/modules/Settings/Vtiger/AddressTemplate.tpl
+
+	4. layouts/vlayout/modules/Settings/Vtiger/ListAddressTemplate.tpl
+
+	5. layouts/vlayout/modules/Vtiger/resources/checkboxcheck.js
+
+	6. modules/BALetters/views/HeaderTemplate.php ( Line no : 71 ) 
