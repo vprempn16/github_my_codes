@@ -1,0 +1,142 @@
+
+
+		1. uploadDocument.php
+
+		
+		2. modules/Settings/Vtiger/views/viewUploadedDocuments.php
+	
+
+		3. layouts/vlayout/modules/Settings/Vtiger/listUploadedDocuments.tpl 	
+
+
+		4. modules/Settings/Vtiger/views/uploadDocuments.php
+
+
+		5. layouts/vlayout/modules/Settings/Vtiger/uploadDocument.tpl
+	
+
+		6. modules/Settings/Vtiger/actions/SaveUploadDocuments.php
+
+
+		7. modules/Settings/Vtiger/views/UpdateCustomDocument.php
+
+
+		8. layouts/vlayout/modules/Vtiger/resources/checkboxcheck.js (Line No : 157)
+
+
+		9. layouts/vlayout/modules/Vtiger/ComposeEmailForm.tpl	 (Line no : 82	) 
+
+	                  <div>
+	                        <input id='AttachtAllDocument'name='attach_All_Created_Document'value='attachAllCreatedDocument' type ='checkbox'>Attach Documents
+	                   </div>
+
+
+		
+		10. modules/Emails/models/Record.php
+
+			(i)  Line NO :51 - 68
+
+//      ------------------------        get Custom Documents    -------------------------------
+
+                $getAttachAllDocuments =$_REQUEST['attach_All_Created_Document'];
+                if($getAttachAllDocuments != null){
+                        global $adb;
+                        $getDocument = $adb->pquery("select *from Vtiger_srba_documents");
+                        $i = 0;
+                        while($row = $adb->fetch_array($getDocument)){
+                                $document[$i]['id'] =$row['fileid'] ;
+                                $document[$i]['name'] = $row ['name'];
+                                $document[$i]['path'] = $row['path'];
+                                $document[$i]['size'] = filesize($document[$i]['path'].$document[$i]['id'].'_'.$document[$i]['name']);
+                                $document[$i]['type'] = $row['type'];
+                                $i++;
+                        }
+                $customCreatedDocuments = $document;
+                }
+                $noOfRecords = count($customCreatedDocuments);
+//      -------------------------               ------------------------------------
+	
+
+			(ii) Line No : 150 - 167
+
+	
+//      ----------------------   Upload CustomFiles to Email Attachments        -------------------------
+
+                      if($customCreatedDocuments !=null){
+                             for($i=0 ; $i<$noOfRecords;$i++){
+                                   $fileNameWithPath = $rootDirectory.$customCreatedDocuments[$i]['path'].$customCreatedDocuments[$i]['name'];
+                                   if(is_file($fileNameWithPath)) {
+                                         $mailer->AddAttachment($fileNameWithPath, $customCreatedDocuments[$i]['name']);
+                                   }
+                             }
+                       }
+//      --------------------------------        END     ------------------------------------------------
+
+
+		
+
+
+
+
+
+
+					Service
+
+
+			1. modules/Settings/Vtiger/views/viewUploadedDocuments.php
+				
+				$fileStatus[] = $row['filter'];
+				$viewer->assign('FILE_Status',$fileStatus);
+
+			2. layouts/vlayout/modules/Settings/Vtiger/listUploadedDocuments.tpl
+
+				<th>Active</th>
+
+				<td><input type="checkbox" id ="custom_Filter{$FILE_ID[$key]}" {if $FILE_Status[$key] eq 1}checked {/if} onclick='FilterCustomDocuments({$FILE_ID[$key]})' > </td>
+
+			3. layouts/vlayout/modules/Vtiger/resources/checkboxcheck.js
+
+				function FilterCustomDocuments(key)
+				{
+				        var boxId = '#custom_Filter'+key;
+			                var checkBoxValue = ($(boxId).prop("checked") == true);
+			                if(checkBoxValue == true){
+			                        var active = 1;
+			                }else{
+			                        var active = 0;
+			                } 
+			                $.ajax({
+			                        type:'POST',
+			                        data:{'id':key,'fileStatus':active},
+			                        url:'index.php?parent=Settings&module=Vtiger&view=UpdateCustomDocument&task=filter',
+			                        success:function(data){ }
+			                });     
+				}
+
+
+			4. modules/Settings/Vtiger/views/UpdateCustomDocument.php
+
+				 if($task == 'filter'){
+		                        $fileId = $_POST['id'];
+		                        $status = $_POST['fileStatus'];
+		                        $adb->pquery("update Vtiger_srba_documents set filter = ? where fileid = ?",array($status,$fileId));
+		                 }	
+			
+
+			5. modules/Emails/models/Record.php
+
+				($getAttachAllDocuments == null)  	// If condition Line NO : 53
+				$getDocument = $adb->pquery("select *from Vtiger_srba_documents where filter = 1"); 	//Get Query
+ 				
+
+			6. alter table Vtiger_srba_documents add filter int ;
+
+
+			7. layouts/vlayout/modules/Vtiger/ComposeEmailForm.tpl
+
+                                 <div class="span10">
+                                         <span>Ohne Standardanhänge senden</span>  
+                                         <span> <input id='AttachtAllDocument'name='attach_All_Created_Document'value='attachAllCreatedDocument' type ='checkbox'>
+					</span>
+                                 </div>
+
